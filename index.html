@@ -5,15 +5,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>RevUp Billing: Expense Breakdown</title>
+
+  <!-- Tailwind & Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- jsPDF + autoTable for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
+
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
           colors: {
-            dark: { bg:'#1a1a1a', card:'#2d2d2d', text:'#e5e5e5', border:'#404040' }
+            dark: {
+              bg:'#1a1a1a',
+              card:'#2d2d2d',
+              text:'#e5e5e5',
+              border:'#404040'
+            }
           }
         }
       }
@@ -23,14 +35,11 @@
     /* brand blue: #008db9 ; expense gold: #b98800 */
     .floating-btn { box-shadow: 0 4px 15px rgba(0, 141, 185, 0.5); }
     .floating-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0, 141, 185, 0.6); }
-
     .transaction-item { transition: all 0.3s ease; }
     .transaction-item:hover { transform: translateX(5px); }
-
-    /* Gold chip bg with subtle tint */
     .expense-chip { background-color: rgba(185, 136, 0, 0.12); color: #b98800; }
 
-    /* Dark mode styles */
+    /* Dark mode overrides */
     .dark body { background-color:#1a1a1a; color:#e5e5e5; }
     .dark .bg-white { background-color:#2d2d2d; }
     .dark .text-gray-800 { color:#e5e5e5; }
@@ -43,20 +52,35 @@
     .dark .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0,0,0,0.3); }
   </style>
 </head>
+
 <body class="bg-gray-50">
   <div class="min-h-screen max-w-4xl mx-auto px-4 pb-20">
     <!-- Header -->
-    <header class="py-6 flex justify-between items-center">
+    <header class="py-6 flex flex-col gap-3 md:flex-row md:gap-0 md:justify-between md:items-center">
       <div>
         <h1 class="text-3xl font-bold text-[#008db9]">RevUp Billing</h1>
         <p class="text-gray-500">Track your expenses</p>
       </div>
-      <button id="theme-toggle" class="p-2 rounded-full hover:bg-[#008db9]/10">
-        <i class="fas fa-sun text-[#008db9]"></i>
-      </button>
+
+      <div class="flex items-center gap-2">
+        <!-- Export buttons -->
+        <button id="export-csv" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium hover:opacity-90"
+                style="border-color:#008db9; color:#008db9;">
+          <i class="fas fa-file-csv"></i> Export CSV
+        </button>
+        <button id="export-pdf" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-white text-sm font-medium hover:opacity-95"
+                style="background-color:#008db9;">
+          <i class="fas fa-file-pdf"></i> Export PDF
+        </button>
+
+        <!-- Theme toggle -->
+        <button id="theme-toggle" class="p-2 rounded-full hover:bg-[#008db9]/10">
+          <i class="fas fa-sun text-[#008db9]"></i>
+        </button>
+      </div>
     </header>
 
-    <!-- Summary Cards (expenses only) -->
+    <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
       <div class="bg-white p-6 rounded-xl shadow-sm border-l-4" style="border-color:#b98800">
         <p class="text-gray-500">Total Expenses (All Time)</p>
@@ -72,39 +96,24 @@
       <!-- Add Expense Form -->
       <div class="bg-white p-6 rounded-xl shadow-sm">
         <h2 class="text-xl font-semibold text-gray-800 mb-4">Add Expense</h2>
-        <form id="transaction-form" class="space-y-4">
-          <!-- hidden type (always expense) -->
-          <input type="hidden" id="type" value="expense" />
 
+        <form id="transaction-form" class="space-y-4">
+          <input type="hidden" id="type" value="expense" />
           <div>
             <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <input
-              type="text" id="description"
-              class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008db9]"
-              placeholder="Medical, Rent, etc." required>
+            <input type="text" id="description" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008db9]" placeholder="Medical, Rent, etc." required>
           </div>
-
           <div>
             <label for="amount" class="block text-sm font-medium text-gray-700 mb-1">Amount (USD)</label>
-            <input
-              type="number" id="amount" step="0.01" min="0.01"
-              class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008db9]"
-              placeholder="1200.00" required>
+            <input type="number" id="amount" step="0.01" min="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008db9]" placeholder="1200.00" required>
           </div>
-
           <div>
             <label for="date" class="block text-sm font-medium text-gray-700 mb-1">Date</label>
-            <input
-              type="date" id="date"
-              class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008db9]"
-              required>
+            <input type="date" id="date" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008db9]" required>
           </div>
-
           <div>
             <label for="category" class="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select
-              id="category"
-              class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008db9]">
+            <select id="category" class="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#008db9]">
               <option value="general">General</option>
               <option value="food">Food</option>
               <option value="transport">Transport</option>
@@ -116,23 +125,19 @@
             </select>
           </div>
 
-          <button
-            type="submit"
-            class="w-full text-white py-2 px-4 rounded-md transition-all flex items-center justify-center gap-2"
-            style="background-color:#008db9">
+          <button type="submit" class="w-full text-white py-2 px-4 rounded-md transition-all flex items-center justify-center gap-2" style="background-color:#008db9">
             <i class="fas fa-plus"></i> Add Expense
           </button>
         </form>
       </div>
 
-      <!-- Transactions List (no income filter) -->
+      <!-- Transactions List -->
       <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-xl font-semibold text-gray-800">Expenses</h2>
-          <!-- simple search -->
+
           <div class="relative">
-            <input id="search" type="text" placeholder="Search description..."
-              class="bg-white border border-gray-300 rounded-md px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-[#008db9] text-sm">
+            <input id="search" type="text" placeholder="Search description..." class="bg-white border border-gray-300 rounded-md px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-[#008db9] text-sm">
             <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
               <i class="fas fa-search text-xs"></i>
             </div>
@@ -147,7 +152,7 @@
       </div>
     </div>
 
-    <!-- Stats Section -->
+    <!-- Stats -->
     <div class="mt-8 bg-white p-6 rounded-xl shadow-sm">
       <h2 class="text-xl font-semibold text-gray-800 mb-4">Monthly Overview</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -163,9 +168,7 @@
     </div>
 
     <!-- Floating Add Button (Mobile) -->
-    <button id="add-btn-mobile"
-      class="fixed bottom-8 right-6 w-14 h-14 rounded-full text-white text-2xl flex items-center justify-center shadow-lg floating-btn md:hidden"
-      style="background-color:#008db9">
+    <button id="add-btn-mobile" class="fixed bottom-8 right-6 w-14 h-14 rounded-full text-white text-2xl flex items-center justify-center shadow-lg floating-btn md:hidden" style="background-color:#008db9">
       <i class="fas fa-plus"></i>
     </button>
   </div>
@@ -181,12 +184,17 @@
       // Initialize + migrate: strip any old 'income' entries
       let transactions = (JSON.parse(localStorage.getItem('transactions')) || []).filter(t => t.type !== 'income');
 
+      // Persist post-migration if anything changed
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+
       // DOM
       const transactionForm = document.getElementById('transaction-form');
       const transactionsList = document.getElementById('transactions-list');
       const addBtnMobile = document.getElementById('add-btn-mobile');
       const themeToggleBtn = document.getElementById('theme-toggle');
       const searchInput = document.getElementById('search');
+      const exportCsvBtn = document.getElementById('export-csv');
+      const exportPdfBtn = document.getElementById('export-pdf');
 
       // Summary elements
       const expenseAmount = document.getElementById('expense-amount');
@@ -196,8 +204,12 @@
       const expenseCategories = document.getElementById('expense-categories');
       const recentTransactions = document.getElementById('recent-transactions');
 
-      // Persist post-migration if anything changed
-      localStorage.setItem('transactions', JSON.stringify(transactions));
+      // Theme init
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        themeToggleBtn.innerHTML = '<i class="fas fa-moon text-[#008db9]"></i>';
+      }
 
       // Initial paint
       updateUI();
@@ -216,7 +228,15 @@
           return;
         }
 
-        const transaction = { id: generateId(), type: 'expense', description, amount, date, category };
+        const transaction = {
+          id: generateId(),
+          type: 'expense',
+          description,
+          amount,
+          date,
+          category
+        };
+
         transactions.push(transaction);
         saveTransactions();
         updateUI();
@@ -224,7 +244,6 @@
         // Reset
         this.reset();
         document.getElementById('date').valueAsDate = new Date();
-
         showNotification('Expense added successfully!');
       });
 
@@ -236,17 +255,22 @@
 
       // Theme toggle
       themeToggleBtn.addEventListener('click', toggleTheme);
-      const savedTheme = localStorage.getItem('theme');
-      if (savedTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-        themeToggleBtn.innerHTML = '<i class="fas fa-moon text-[#008db9]"></i>';
-      }
+
+      // Export handlers
+      exportCsvBtn.addEventListener('click', handleExportCSV);
+      exportPdfBtn.addEventListener('click', handleExportPDF);
 
       function generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
       }
-      function saveTransactions() { localStorage.setItem('transactions', JSON.stringify(transactions)); }
-      function updateUI() { updateTransactionList(); updateSummary(); updateStats(); }
+      function saveTransactions() {
+        localStorage.setItem('transactions', JSON.stringify(transactions));
+      }
+      function updateUI() {
+        updateTransactionList();
+        updateSummary();
+        updateStats();
+      }
 
       // List (expenses only)
       function updateTransactionList() {
@@ -256,7 +280,7 @@
         if (q) {
           filtered = filtered.filter(t =>
             t.description.toLowerCase().includes(q) ||
-            t.category.toLowerCase().includes(q)
+            (t.category || '').toLowerCase().includes(q)
           );
         }
 
@@ -276,7 +300,7 @@
               </div>
               <div>
                 <p class="font-medium text-gray-800">${escapeHtml(t.description)}</p>
-                <p class="text-xs text-gray-500">${formatDate(t.date)} • ${t.category}</p>
+                <p class="text-xs text-gray-500">${formatDate(t.date)} • ${escapeHtml(t.category || '')}</p>
               </div>
             </div>
             <div class="text-right">
@@ -325,52 +349,151 @@
         const expenseByCategory = transactions
           .filter(t => t.type === 'expense')
           .reduce((acc, t) => {
-            if (!acc[t.category]) acc[t.category] = 0;
-            acc[t.category] += t.amount;
+            const key = t.category || 'other';
+            if (!acc[key]) acc[key] = 0;
+            acc[key] += t.amount;
             return acc;
           }, {});
-
         const totalExpense = Object.values(expenseByCategory).reduce((s, n) => s + n, 0);
 
-        expenseCategories.innerHTML = Object.entries(expenseByCategory)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([category, amount]) => {
-            const pct = totalExpense === 0 ? 0 : ((amount / totalExpense) * 100).toFixed(1);
-            return `
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="capitalize font-medium">${category}</span>
-                  <span class="text-gray-700">${formatCurrency(amount)} (${pct}%)</span>
+        expenseCategories.innerHTML =
+          Object.entries(expenseByCategory)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([category, amount]) => {
+              const pct = totalExpense === 0 ? 0 : ((amount / totalExpense) * 100).toFixed(1);
+              return `
+                <div>
+                  <div class="flex justify-between text-sm mb-1">
+                    <span class="capitalize font-medium">${escapeHtml(category)}</span>
+                    <span class="text-gray-700">${formatCurrency(amount)} (${pct}%)</span>
+                  </div>
+                  <div class="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
+                    <div class="h-full" style="width:${pct}%; background-color:#008db9"></div>
+                  </div>
                 </div>
-                <div class="w-full bg-gray-200 h-2 rounded-full overflow-hidden">
-                  <div class="h-full" style="width:${pct}%; background-color:#008db9"></div>
-                </div>
-              </div>
-            `;
-          }).join('') || '<p class="text-sm text-gray-500">No expense data yet</p>';
+              `;
+            }).join('') || '<p class="text-sm text-gray-500">No expense data yet</p>';
 
         const sortedByDate = [...transactions]
           .filter(t => t.type === 'expense')
           .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-        recentTransactions.innerHTML = sortedByDate.slice(0, 5).map(t => `
-          <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-            <div class="flex items-center gap-3">
-              <div class="w-8 h-8 rounded-full flex items-center justify-center expense-chip">
-                <i class="${getCategoryIcon(t.category)} text-xs"></i>
+        recentTransactions.innerHTML =
+          sortedByDate.slice(0, 5).map(t => `
+            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center expense-chip">
+                  <i class="${getCategoryIcon(t.category)} text-xs"></i>
+                </div>
+                <div>
+                  <p class="text-sm font-medium">${escapeHtml(t.description)}</p>
+                  <p class="text-xs text-gray-500">${formatDateShort(t.date)}</p>
+                </div>
               </div>
-              <div>
-                <p class="text-sm font-medium">${escapeHtml(t.description)}</p>
-                <p class="text-xs text-gray-500">${formatDateShort(t.date)}</p>
-              </div>
+              <p class="text-sm font-medium" style="color:#b98800">-${formatCurrency(t.amount)}</p>
             </div>
-            <p class="text-sm font-medium" style="color:#b98800">-${formatCurrency(t.amount)}</p>
-          </div>
-        `).join('') || '<p class="text-sm text-gray-500">No recent expenses</p>';
+          `).join('') || '<p class="text-sm text-gray-500">No recent expenses</p>';
       }
 
-      // Helpers
+      // ===== EXPORTS =====
+
+      function handleExportCSV() {
+        const rows = [['Date','Description','Category','Amount (USD)']];
+        const expenses = transactions.filter(t => t.type === 'expense');
+        if (expenses.length === 0) {
+          showNotification('No expenses to export');
+          return;
+        }
+        expenses
+          .sort((a,b) => new Date(a.date) - new Date(b.date))
+          .forEach(t => {
+            rows.push([formatISODate(t.date), cleanCSV(t.description), (t.category || ''), t.amount.toFixed(2)]);
+          });
+
+        const csv = rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
+        const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+        downloadBlob(blob, `revup-expenses-${yyyyMMdd(new Date())}.csv`);
+      }
+
+      function handleExportPDF() {
+        const { jsPDF } = window.jspdf || {};
+        if (!jsPDF || !window.jspdf || !('autoTable' in (jsPDF.API || {}))) {
+          alert('PDF libraries failed to load. Check your network connection.');
+          return;
+        }
+        const expenses = transactions.filter(t => t.type === 'expense');
+        if (expenses.length === 0) {
+          showNotification('No expenses to export');
+          return;
+        }
+
+        // Prepare data
+        const sorted = expenses.sort((a,b) => new Date(a.date) - new Date(b.date));
+        const rows = sorted.map(t => [
+          formatISODate(t.date),
+          t.description || '',
+          t.category || '',
+          formatCurrency(t.amount)
+        ]);
+
+        const total = expenses.reduce((s,t)=>s+t.amount,0);
+
+        const doc = new jsPDF({ unit: 'pt', format: 'a4' }); // 595 x 842pt
+        const marginX = 40;
+        let cursorY = 52;
+
+        // Header
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(16);
+        doc.setTextColor(0, 0, 0);
+        doc.text('RevUp Billing — Expense Report', marginX, cursorY);
+        cursorY += 18;
+
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(10);
+        doc.setTextColor(80);
+        doc.text(`Generated: ${new Date().toLocaleString()}`, marginX, cursorY);
+        cursorY += 14;
+
+        // Totals band
+        doc.setDrawColor(0,141,185);
+        doc.setFillColor(0,141,185, 0.08);
+        doc.roundedRect(marginX, cursorY, 515, 28, 6, 6, 'F');
+        doc.setFontSize(11);
+        doc.setTextColor(0,0,0);
+        doc.text(`Total Expenses: ${formatCurrency(total)}`, marginX + 12, cursorY + 18);
+        cursorY += 44;
+
+        // Table
+        doc.autoTable({
+          head: [['Date','Description','Category','Amount']],
+          body: rows,
+          startY: cursorY,
+          theme: 'grid',
+          styles: { fontSize: 9, cellPadding: 6 },
+          headStyles: { fillColor: [0,141,185], textColor: 255 },
+          columnStyles: {
+            0: { cellWidth: 90 },
+            1: { cellWidth: 260 },
+            2: { cellWidth: 110 },
+            3: { cellWidth: 80, halign: 'right' }
+          },
+          didDrawPage: (data) => {
+            // Footer page number
+            const pageSize = doc.internal.pageSize;
+            const pageWidth = pageSize.getWidth();
+            const pageHeight = pageSize.getHeight();
+            doc.setFontSize(9);
+            doc.setTextColor(120);
+            doc.text(`Page ${doc.getNumberOfPages()}`, pageWidth - 60, pageHeight - 20);
+          }
+        });
+
+        doc.save(`revup-expenses-${yyyyMMdd(new Date())}.pdf`);
+      }
+
+      // ===== Helpers =====
       function formatDate(dateString) {
         const options = { year:'numeric', month:'short', day:'numeric' };
         return new Date(dateString).toLocaleDateString('en-US', options);
@@ -378,6 +501,17 @@
       function formatDateShort(dateString) {
         const options = { month:'short', day:'numeric' };
         return new Date(dateString).toLocaleDateString('en-US', options);
+      }
+      function formatISODate(dateString) {
+        const d = new Date(dateString);
+        const mm = (d.getMonth()+1).toString().padStart(2,'0');
+        const dd = d.getDate().toString().padStart(2,'0');
+        return `${d.getFullYear()}-${mm}-${dd}`;
+      }
+      function yyyyMMdd(d) {
+        const mm = (d.getMonth()+1).toString().padStart(2,'0');
+        const dd = d.getDate().toString().padStart(2,'0');
+        return `${d.getFullYear()}${mm}${dd}`;
       }
       function getCategoryIcon(category) {
         const icons = {
@@ -394,11 +528,11 @@
       }
       function showNotification(message) {
         const notification = document.createElement('div');
-        notification.className = 'fixed top-4 right-4 text-white px-4 py-2 rounded-md shadow-lg flex items-center gap-2';
+        notification.className = 'fixed top-4 right-4 text-white px-4 py-2 rounded-md shadow-lg flex items-center gap-2 z-50';
         notification.style.backgroundColor = '#008db9';
-        notification.innerHTML = `<i class="fas fa-check-circle"></i><span>${message}</span>`;
+        notification.innerHTML = `<i class="fas fa-check-circle"></i><span>${escapeHtml(message)}</span>`;
         document.body.appendChild(notification);
-        setTimeout(() => { notification.remove(); }, 2500);
+        setTimeout(() => notification.remove(), 2500);
       }
       function toggleTheme() {
         if (document.documentElement.classList.contains('dark')) {
@@ -413,10 +547,29 @@
       }
       function sameMonth(d, y, m) { return d.getFullYear() === y && d.getMonth() === m; }
       function escapeHtml(s) {
-        return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+        return (s || '').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+      }
+
+      // CSV helpers
+      function csvEscape(v){
+        const s = String(v ?? '');
+        if (s.includes('"') || s.includes(',') || s.includes('\n') || s.includes('\r')) {
+          return `"${s.replace(/"/g,'""')}"`;
+        }
+        return s;
+      }
+      function cleanCSV(s){ return (s || '').toString().replace(/\r?\n/g,' ').trim(); }
+      function downloadBlob(blob, filename){
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
       }
     });
   </script>
 </body>
 </html>
-
